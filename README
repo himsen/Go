@@ -1,6 +1,6 @@
-Build
+Build:
 
-Build using:
+Build using
 
 $go build crypt.go
 
