@@ -23,6 +23,7 @@ import (
  * Support for alternative input methods
  * Support for alternative encodings
  * Support for alternative ciphers (e.g. stream cipher)
+ * Support for setting permissions of output file
  */
 
 var fkey string 
@@ -110,7 +111,7 @@ func readfile(path string) ([]byte, error) {
 func GenerateNonce(noncesize int) ([]byte) {
 	nonce := make([]byte, noncesize)
 
-	//Use crypto PRNG
+	//Use crypto RNG
 	_, err := io.ReadFull(rand.Reader, nonce)
 	checkerror(err)
 
@@ -145,29 +146,30 @@ func enc(key []byte) (error) {
 		return nil
 	}
 
-	//Read file (if it exists)
+	//Read plaintext file (if it exists)
 	plaintext, err := readfile(fenc)
 	if err != nil {
 		return err
 	}
 
 	//Initialise AES cipher
-	c, err := aes.NewCipher(key)
+	aescipher, err := aes.NewCipher(key)
 	if err != nil {
 		return errors.New("Cipher initialisation")
 	}
 
 	//Initialise GCM mode
-	gcm, err := cipher.NewGCM(c)
+	aesgcm, err := cipher.NewGCM(aescipher)
 	if err != nil {
 		return errors.New("GCM initialisation")
 	}
 
 	//Generate nonce (use GCM standard nonce size)
-	nonce := GenerateNonce(gcm.NonceSize())
+	nonce := GenerateNonce(aesgcm.NonceSize())
 
 	//Encrypt and append result to nonce
-	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	//Hence ciphertext will consist of <nonce + encrypted data>
+	ciphertext := aesgcm.Seal(nonce, nonce, plaintext, nil)
 
 	//Write to file
 	err = ioutil.WriteFile("ciphertext", ciphertext, 0644)
@@ -177,7 +179,7 @@ func enc(key []byte) (error) {
 	//base64 encoding if we cared about size
 	if fdumphexciphertext {
 		hexciphertext := make([]byte, hex.EncodedLen(len(ciphertext)))
-		_ = hex.Encode(hexciphertext, ciphertext)
+		hex.Encode(hexciphertext, ciphertext)
 		err = ioutil.WriteFile("ciphertextdump", hexciphertext, 0644)
 		checkerror(err)
 	}
@@ -194,23 +196,35 @@ func dec(key []byte) (error) {
 		return nil
 	}
 
-	//Read file (if it exists)
-	plaintext, err := readfile(fenc)
+	//Read ciphertext file (if it exists)
+	ciphertext, err := readfile(fdec)
 	if err != nil {
 		return err
 	}
 
 	//Initialise AES cipher
-	c, err := aes.NewCipher(key)
+	aescipher, err := aes.NewCipher(key)
 	if err != nil {
 		return errors.New("Cipher initialisation")
 	}
 
 	//Initialise GCM mode
-	gcm, err := cipher.NewGCM(c)
+	aesgcm, err := cipher.NewGCM(aescipher)
 	if err != nil {
 		return errors.New("GCM initialisation")
 	}
+
+	//Extract nonce
+	nonce := make([]byte, aesgcm.NonceSize())
+	copy(nonce, ciphertext)
+
+	//Decrypt
+	plaintext, err := aesgcm.Open(nil, nonce, ciphertext[aesgcm.NonceSize():], nil)
+	checkerror(err)
+
+	//Write to file
+	err = ioutil.WriteFile("plaintext", plaintext, 0644)
+	checkerror(err)
 
 	return nil
 
