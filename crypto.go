@@ -7,11 +7,13 @@ import (
 	"os"
 	"io/ioutil"
 	"encoding/hex"
+	"crypto/aes"
+	"crypto/cipher"
 )
 
 /* 
  * Improvements:
- * Use Cloudflare improved GO AES-GCM cipher implementation
+ * Use Cloudflare's improved GO crypto implementation
  * 
  */
 
@@ -21,7 +23,7 @@ var fdec string
 
 func init() {
 
-	flag.StringVar(&fkey, "k", "", "Path to key")
+	flag.StringVar(&fkey, "k", "", "Hex encoded key")
 	flag.StringVar(&fenc, "e", "", "Path to plaintext file")
 	flag.StringVar(&fdec, "d", "", "Path to ciphertext file")
 
@@ -31,27 +33,26 @@ func main() {
 
 	flag.Parse()
 
-	var key []byte
-
 	//Read key
-	if _, err := readkey(); err != nil {
-		fmt.Fprintf(os.Stderr, "Reading key failed: %v\n", err)
+	key, err := parsekey()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Parsing key failed: %v\n", err)
 		os.Exit(1)
 	}
 
 	//Encrypt
 	if err := enc(key); err != nil {
-		fmt.Fprintf(os.Stderr, "Encryption failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Encryption failed")
 		os.Exit(1)
 	}
 
 	//Decrypt
 	if err := dec(key); err != nil {
-		fmt.Fprintf(os.Stderr, "Decryption failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Decryption failed")
 		os.Exit(1)
 	}
 
-	fmt.Println("Flag contens:")
+	fmt.Println("Flag contents:")
 	fmt.Println("key:", fkey)
 	fmt.Println("Plaintext:", fenc)
 	fmt.Println("Ciphertext:", fdec)
@@ -68,13 +69,13 @@ func checkerror(err error) {
 
 }
 
-func doespathexist(path string) (bool, string) {
+func doesfileexist(path string) (bool, string) {
 
     if _, err := os.Stat(path); err != nil {
     	if os.IsNotExist(err) {
-        	return false, "Provided key file does not exists" //No
+        	return false, "Provided file does not exists" //No
     	} else {
-        	return false, "Might be a permission error with provided key file" //Or no
+        	return false, "Might be a permission error with provided file" //Or no
     	}
 	}
 
@@ -82,50 +83,48 @@ func doespathexist(path string) (bool, string) {
 
 }
 
-func readkey() ([]byte, error) {
+func readfile(path string) ([]byte, error) {
 
-	var binkey []byte
+	var data []byte
 
-	//Check if key file is provided 
-	if len(fkey) == 0 {
-		//Can't encrypt/decrypt without a key
-		return nil, errors.New("No key file provided")
-	}
-
-	//Check if key file exists
-	if pathexists, errstr := doespathexist(fkey); !pathexists {
+	//Check if file exists
+	if fileexists, errstr := doesfileexist(path); !fileexists {
 		return nil, errors.New(errstr)
 	}
 
-	//Read key file
-	hexkey, err := ioutil.ReadFile(fkey)
+	//Read file
+	//For simplicity assume we are dealing with small files
+	data, err := ioutil.ReadFile(path)
 	checkerror(err)
 
 	//Check if the file contains data
-	if len(hexkey) - 1 == 0 {
-		return nil, errors.New("No key in key file")
+	if len(data) == 0 {
+		return nil, errors.New("No data in file")
 	}
 
-	//Remove newline
-	hexkey = hexkey[:len(hexkey) - 1]
+	return data, nil
 
-	fmt.Println(hexkey)
-	//Key is assumed to be hex encoded
-	//Convert hex encodd key to binary
-	binkey = make([]byte, hex.DecodedLen(len(hexkey)))
-	nbytes, err := hex.Decode(binkey, hexkey)
-	checkerror(err)
+}
 
-	//Check if key have correct length (256 bits)
-	if nbytes * 8 != 256 {
-		return nil, errors.New("Key has illigal length")
+func parsekey() ([]byte, error) {
+
+	//Key length (counted in bytes)
+	keylen := hex.DecodedLen(len(fkey))
+
+	//Check if key has correct (paranoid level) length (256 bits)
+	if keylen * 8 != 256 {
+		return nil, errors.New("Key has illegal length")
 	} 
+
+	//Convert hex encoded key (string) to binary
+	binkey := make([]byte, keylen)
+	binkey, err := hex.DecodeString(fkey)
+	checkerror(err)
 
 	//Return parsed binary key
 	return binkey, nil
-}
 
-//Implement using Cloudflare crypto library
+}
 
 func enc(key []byte) (error) {
 
@@ -133,6 +132,11 @@ func enc(key []byte) (error) {
 	if len(fenc) == 0 {
 		//Do nothing
 		return nil
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return errors.New("Encryption failed")
 	}
 
 	return nil
