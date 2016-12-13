@@ -1,0 +1,19 @@
+Build
+
+Build using:
+
+$go build crypt.go
+
+Usage:
+
+To encrypt the file 'plaintextinput'
+
+$./crypt -k=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -e=plaintextinput
+
+To encrypt the file 'plaintextinput' and get an hex encoded dump of the ciphertext (dump in file 'ciphertextdump')
+
+$./crypt -ctdump -k=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -e=plaintextinput
+
+To decrypt the file 'ciphertext'
+
+$./crypt -k=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -d=ciphertext

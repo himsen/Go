@@ -23,6 +23,7 @@ import (
  * Support for alternative ciphers (e.g. stream cipher)
  * Support for setting permissions of output file
  * Support for less paranoid key lengths
+ * Support for user-defined output file names
  */
 
 var fkey string 
