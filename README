@@ -6,11 +6,18 @@ $go build crypt.go
 
 Usage:
 
+Flags
+
+-k  hex encoded key (must be 32 bytes)
+-e  (encrypt) Path to plaintext file
+-d  (decrypt) Path to ciphertext file
+-ctdump  dump the cipher in a file, hex encoded
+
 To encrypt the file 'plaintextinput' with an all 'A' hex encoded key
 
 $./crypt -k=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -e=plaintextinput
 
-To encrypt the file 'plaintextinput' and get an hex encoded dump of the ciphertext (dump in file 'ciphertextdump') with an all 'A' hex encoded key
+To encrypt the file 'plaintextinput' and get an hex encoded dump of the ciphertext (dumped in file 'ciphertextdump') with an all 'A' hex encoded key
 
 $./crypt -ctdump -k=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -e=plaintextinput
 
