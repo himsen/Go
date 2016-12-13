@@ -134,7 +134,7 @@ func parsekey() ([]byte, error) {
 
 	//Check if key has correct (paranoid level) length (32 bytes)
 	if keylen != 32 {
-		fmt.Println("Wrong key length:", keylen)
+		fmt.Println("Key length:", keylen)
 		return nil, errors.New("Key has illegal length")
 	} 
 
