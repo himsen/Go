@@ -22,6 +22,7 @@ import (
  * Support for alternative encodings
  * Support for alternative ciphers (e.g. stream cipher)
  * Support for setting permissions of output file
+ * Support for less paranoid key lengths
  */
 
 var fkey string 
@@ -33,7 +34,7 @@ func init() {
 
 	flag.StringVar(&fkey, "k", "", "Hex encoded key")
 	flag.StringVar(&fenc, "e", "", "Path to plaintext file")
-	flag.StringVar(&fdec, "d", "", "Path to ciphertext file (content hex encoded)")
+	flag.StringVar(&fdec, "d", "", "Path to ciphertext file")
 	flag.BoolVar(&fdumphexciphertext, "ctdump", false, "Dump hex encoded ciphertext after encryption")
 
 }
@@ -87,7 +88,7 @@ func doesfileexist(path string) (bool, string) {
 
 }
 
-//Reads a file after doing basic sanity checks.
+//Reads a file and basic sanity checks.
 func readfile(path string) ([]byte, error) {
 
 	//Check if file exists
@@ -145,8 +146,8 @@ func parsekey() ([]byte, error) {
 
 }
 
-//Encrypts the content of a file and writes the resulting
-//ciphertext to a second file.
+//Encrypts the content of a the file 'fenc' and writes the
+//resulting ciphertext to the file './ciphertext'.
 //Provides both confidentiality and authentication.
 func enc(key []byte) (error) {
 
@@ -178,14 +179,14 @@ func enc(key []byte) (error) {
 	nonce := GenerateNonce(aesgcm.NonceSize())
 
 	//Encrypt and append result to nonce
-	//Hence ciphertext will consist of <nonce + encrypted data>
+	//Hence ciphertext will consist of <nonce + encrypted data + tag>
 	ciphertext := aesgcm.Seal(nonce, nonce, plaintext, nil)
 
 	//Write to file
 	err = ioutil.WriteFile("ciphertext", ciphertext, 0644)
 	checkerror(err)
 
-	//Dump human-readable ciphertext if specified (hex encoded)
+	//Dump human-readable (hex encoded) ciphertext if specified
 	//base64 encoding if we cared about size
 	if fdumphexciphertext {
 		hexciphertext := make([]byte, hex.EncodedLen(len(ciphertext)))
@@ -198,8 +199,8 @@ func enc(key []byte) (error) {
 
 }
 
-//Decrypts the content of file and writes the resulting
-//plaintext to a second file. 
+//Decrypts the content of the file 'fdec' and writes the
+//resulting plaintext to the file './plaintext'. 
 //Provides both confidentiality and authentication.
 func dec(key []byte) (error) {
 
