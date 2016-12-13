@@ -6,26 +6,36 @@ import (
 	"errors"
 	"os"
 	"io/ioutil"
+	"io"
 	"encoding/hex"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
 )
+
+//CLEAN KEY FROM MEMORY!!!
 
 /* 
  * Improvements:
  * Use Cloudflare's improved GO crypto implementation
- * 
+ * Better handling of large files
+ * Unify error messages
+ * Support for alternative input methods
+ * Support for alternative encodings
+ * Support for alternative ciphers (e.g. stream cipher)
  */
 
 var fkey string 
 var fenc string
 var fdec string
+var fdumphexciphertext bool
 
 func init() {
 
 	flag.StringVar(&fkey, "k", "", "Hex encoded key")
 	flag.StringVar(&fenc, "e", "", "Path to plaintext file")
-	flag.StringVar(&fdec, "d", "", "Path to ciphertext file")
+	flag.StringVar(&fdec, "d", "", "Path to ciphertext file (content hex encoded)")
+	flag.BoolVar(&fdumphexciphertext, "ctdump", false, "Dump hex encoded ciphertext after encryption")
 
 }
 
@@ -33,7 +43,7 @@ func main() {
 
 	flag.Parse()
 
-	//Read key
+	//Parse key
 	key, err := parsekey()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Parsing key failed: %v\n", err)
@@ -42,22 +52,15 @@ func main() {
 
 	//Encrypt
 	if err := enc(key); err != nil {
-		fmt.Fprintf(os.Stderr, "Encryption failed")
+		fmt.Fprintf(os.Stderr, "Encryption failed: %v\n", err)
 		os.Exit(1)
 	}
 
 	//Decrypt
 	if err := dec(key); err != nil {
-		fmt.Fprintf(os.Stderr, "Decryption failed")
+		fmt.Fprintf(os.Stderr, "Decryption failed: %v\n", err)
 		os.Exit(1)
 	}
-
-	fmt.Println("Flag contents:")
-	fmt.Println("key:", fkey)
-	fmt.Println("Plaintext:", fenc)
-	fmt.Println("Ciphertext:", fdec)
-
-
 
 }
 
@@ -73,9 +76,9 @@ func doesfileexist(path string) (bool, string) {
 
     if _, err := os.Stat(path); err != nil {
     	if os.IsNotExist(err) {
-        	return false, "Provided file does not exists" //No
+        	return false, "Provided file does not exist" //No
     	} else {
-        	return false, "Might be a permission error with provided file" //Or no
+        	return false, "There might be a permission error with provided file" //Problems
     	}
 	}
 
@@ -84,8 +87,6 @@ func doesfileexist(path string) (bool, string) {
 }
 
 func readfile(path string) ([]byte, error) {
-
-	var data []byte
 
 	//Check if file exists
 	if fileexists, errstr := doesfileexist(path); !fileexists {
@@ -106,6 +107,16 @@ func readfile(path string) ([]byte, error) {
 
 }
 
+func GenerateNonce(noncesize int) ([]byte) {
+	nonce := make([]byte, noncesize)
+
+	//Use crypto PRNG
+	_, err := io.ReadFull(rand.Reader, nonce)
+	checkerror(err)
+
+	return nonce
+}
+
 func parsekey() ([]byte, error) {
 
 	//Key length (counted in bytes)
@@ -113,6 +124,7 @@ func parsekey() ([]byte, error) {
 
 	//Check if key has correct (paranoid level) length (256 bits)
 	if keylen * 8 != 256 {
+		fmt.Println("Wrong key length:", keylen)
 		return nil, errors.New("Key has illegal length")
 	} 
 
@@ -121,7 +133,6 @@ func parsekey() ([]byte, error) {
 	binkey, err := hex.DecodeString(fkey)
 	checkerror(err)
 
-	//Return parsed binary key
 	return binkey, nil
 
 }
@@ -134,9 +145,41 @@ func enc(key []byte) (error) {
 		return nil
 	}
 
-	block, err := aes.NewCipher(key)
+	//Read file (if it exists)
+	plaintext, err := readfile(fenc)
 	if err != nil {
-		return errors.New("Encryption failed")
+		return err
+	}
+
+	//Initialise AES cipher
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return errors.New("Cipher initialisation")
+	}
+
+	//Initialise GCM mode
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return errors.New("GCM initialisation")
+	}
+
+	//Generate nonce (use GCM standard nonce size)
+	nonce := GenerateNonce(gcm.NonceSize())
+
+	//Encrypt and append result to nonce
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+
+	//Write to file
+	err = ioutil.WriteFile("ciphertext", ciphertext, 0644)
+	checkerror(err)
+
+	//Dump human-readable ciphertext if specified (hex encoded)
+	//base64 encoding if we cared about size
+	if fdumphexciphertext {
+		hexciphertext := make([]byte, hex.EncodedLen(len(ciphertext)))
+		_ = hex.Encode(hexciphertext, ciphertext)
+		err = ioutil.WriteFile("ciphertextdump", hexciphertext, 0644)
+		checkerror(err)
 	}
 
 	return nil
@@ -149,6 +192,24 @@ func dec(key []byte) (error) {
 	if len(fdec) == 0 {
 		//Do nothing
 		return nil
+	}
+
+	//Read file (if it exists)
+	plaintext, err := readfile(fenc)
+	if err != nil {
+		return err
+	}
+
+	//Initialise AES cipher
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return errors.New("Cipher initialisation")
+	}
+
+	//Initialise GCM mode
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return errors.New("GCM initialisation")
 	}
 
 	return nil
