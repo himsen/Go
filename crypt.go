@@ -13,8 +13,6 @@ import (
 	"crypto/rand"
 )
 
-//CLEAN KEY FROM MEMORY!!!
-
 /* 
  * Improvements:
  * Use Cloudflare's improved GO crypto implementation
@@ -65,6 +63,7 @@ func main() {
 
 }
 
+//Panic errors!!!
 func checkerror(err error) {
 
 	if err != nil {
@@ -73,20 +72,22 @@ func checkerror(err error) {
 
 }
 
+//Checks whether a file exists. If not, checks what the problem might be. 
 func doesfileexist(path string) (bool, string) {
 
-    if _, err := os.Stat(path); err != nil {
-    	if os.IsNotExist(err) {
-        	return false, "Provided file does not exist" //No
-    	} else {
-        	return false, "There might be a permission error with provided file" //Problems
-    	}
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, "Provided file does not exist" //No
+		} else {
+			return false, "There might be a permission error with provided file" //Problems
+		}
 	}
 
 	return true, "" //Yes
 
 }
 
+//Reads a file after doing basic sanity checks.
 func readfile(path string) ([]byte, error) {
 
 	//Check if file exists
@@ -108,7 +109,11 @@ func readfile(path string) ([]byte, error) {
 
 }
 
+//Generate a random Nonce.
+//Responsibility of the user to not invoke this function
+//too many times using the same key.
 func GenerateNonce(noncesize int) ([]byte) {
+
 	nonce := make([]byte, noncesize)
 
 	//Use crypto RNG
@@ -118,13 +123,15 @@ func GenerateNonce(noncesize int) ([]byte) {
 	return nonce
 }
 
+//Parse the user-defined key.
+//Key is assumed to be hex encoded.
 func parsekey() ([]byte, error) {
 
 	//Key length (counted in bytes)
 	keylen := hex.DecodedLen(len(fkey))
 
-	//Check if key has correct (paranoid level) length (256 bits)
-	if keylen * 8 != 256 {
+	//Check if key has correct (paranoid level) length (32 bytes)
+	if keylen != 32 {
 		fmt.Println("Wrong key length:", keylen)
 		return nil, errors.New("Key has illegal length")
 	} 
@@ -138,6 +145,9 @@ func parsekey() ([]byte, error) {
 
 }
 
+//Encrypts the content of a file and writes the resulting
+//ciphertext to a second file.
+//Provides both confidentiality and authentication.
 func enc(key []byte) (error) {
 
 	//Check if encrypt flag is set
@@ -188,6 +198,9 @@ func enc(key []byte) (error) {
 
 }
 
+//Decrypts the content of file and writes the resulting
+//plaintext to a second file. 
+//Provides both confidentiality and authentication.
 func dec(key []byte) (error) {
 
 	//Check if decrypt flag is set
@@ -229,5 +242,3 @@ func dec(key []byte) (error) {
 	return nil
 
 }
-
-
